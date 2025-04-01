@@ -4,6 +4,9 @@ import os
 from simulation_scripts.simulator import PDUScheduler
 
 class TestPDUScheduler(unittest.TestCase):
+    def __init__(self, methodName: str = "runTest"):
+        super().__init__(methodName)
+
     def setUp(self):
         self.pdus_file = "test_pdus.csv"
         self.upfs_file = "test_upfs.csv"
@@ -39,9 +42,12 @@ class TestPDUScheduler(unittest.TestCase):
 
         df = pd.read_csv("allocation_results.csv")
         first_starts = df[df["event"] == "START"].drop_duplicates(subset="pdu_id")
-        terminations = df[df["event"] == "TERMINATE"]
+
+        admitted_pdus = df[(df["event"] == "START") & (df["status"] != "REJECTED")]["pdu_id"].unique()
+        terminations = df[(df["event"] == "TERMINATE") & (df["pdu_id"].isin(admitted_pdus))]
+
         self.assertEqual(len(first_starts), 2)
-        self.assertEqual(len(terminations), 2)
+        self.assertEqual(len(terminations), len(admitted_pdus))
         self.assertTrue((df["event"] == "START").any())
         self.assertTrue((df["event"] == "TERMINATE").any())
         self.assertIn("cpu_allocated", df.columns)
@@ -50,8 +56,9 @@ class TestPDUScheduler(unittest.TestCase):
     def test_satisfaction_status(self):
         scheduler = PDUScheduler(self.pdus_file, self.upfs_file)
         scheduler.run()
-        satisfied = [entry['status'] for entry in scheduler.result_log if entry['event'] == "START"]
-        self.assertTrue(all(status in ["SATISFIED", "UNSATISFIED"] for status in satisfied))
+        start_entries = [entry['status'] for entry in scheduler.result_log if entry['event'] == "START"]
+        filtered = [status for status in start_entries if status != "REJECTED"]
+        self.assertTrue(all(status in ["SATISFIED", "UNSATISFIED"] for status in filtered))
 
     def test_no_active_pdus_left(self):
         scheduler = PDUScheduler(self.pdus_file, self.upfs_file)
