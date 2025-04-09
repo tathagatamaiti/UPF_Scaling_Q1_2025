@@ -3,11 +3,12 @@ import heapq
 from typing import Dict, List
 
 from simulation_scripts.HPAscaler import HPAScaler
+from simulation_scripts.OptimizationScaler import OptimizationScaler
 
 
 class PDUScheduler:
-    def __init__(self, pdus_file: str, upfs_file: str, use_hpa: bool = False):
-        self.use_hpa = use_hpa
+    def __init__(self, pdus_file: str, upfs_file: str, mode: str = "static"):
+        self.mode = mode
         self.pdus_df = pd.read_csv(pdus_file)
         self.pdus_df["pdu_id"] = self.pdus_df["pdu_id"].astype(int)
         self.pdus_df = self.pdus_df.drop_duplicates(subset="pdu_id").copy()
@@ -16,9 +17,12 @@ class PDUScheduler:
         self.upfs_df = pd.read_csv(upfs_file)
         self.upfs_df["upf_id"] = self.upfs_df["upf_id"].astype(int)
 
-        if self.use_hpa:
+        if self.mode == "hpa":
             self.hpa = HPAScaler(self.upfs_df)
             self.active_upfs = self.hpa.get_active_upfs()
+        elif self.mode == "optimizer":
+            self.optimizer = OptimizationScaler(self.upfs_df, self.pdus_df)
+            self.active_upfs = self.upfs_df.copy()
         else:
             self.active_upfs = self.upfs_df.copy()
 
@@ -197,9 +201,17 @@ class PDUScheduler:
         while self.event_queue:
             self.current_time, _, event_type, pdu_id = heapq.heappop(self.event_queue)
 
-            if self.use_hpa and self.hpa.should_check(self.current_time):
+            if self.mode == "hpa" and self.hpa.should_check(self.current_time):
                 self.hpa.update(self.current_time, self.upf_allocations)
                 self.active_upfs = self.hpa.get_active_upfs()
+
+
+            elif self.mode == "optimizer" and (
+                    self.current_time - self.optimizer.last_run_time) >= self.optimizer.chunk_interval:
+                print(f"[OPTIMIZER] Running optimizer at time {self.current_time}")
+                self.optimizer.update(self.current_time, self.active_pdus, self.pdu_to_upf)
+                self.active_upfs = self.optimizer.get_active_upfs(self.current_time)
+                self.optimizer.last_run_time = self.current_time
 
             if event_type == "start":
                 self._handle_start(pdu_id)
