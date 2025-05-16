@@ -1,39 +1,53 @@
 set -e
 
 pip install --upgrade pip
-pip install pandas matplotlib typing numpy
+pip install pandas matplotlib typing numpy pyomo
 
-echo "[INFO] Generating PDU and UPF data"
-python3 data_and_debug_scripts/generate_data.py
+lambdas=(0.1 0.3 0.5 0.7 1 3 5 7 10)
+seeds=(1000000007 1000000009 1000000021 1000000033 1000000087 1000000093 1000000103 1000000123 1000000181 1000000207)
 
-echo "[INFO] Running unit tests"
-python3 -m unittest simulation_scripts/test_simulator.py
+for lambda in "${lambdas[@]}"; do
+    for seed in "${seeds[@]}"; do
 
-echo "[INFO] Running simulation WITHOUT HPA"
-python3 <<EOF
+        echo "[INFO] Running for lambda=${lambda}, seed=${seed}"
+
+        python3 -c "
+import numpy as np
+from data_and_debug_scripts.generate_data import generate_pdu_data, generate_upf_data
+generate_pdu_data(end_time_limit=3600, lam=${lambda}, mu=0.02, seed=${seed})
+generate_upf_data(num_upfs=50, seed=${seed})
+print('[INFO] Data generated for lambda=${lambda}, seed=${seed}')
+"
+
+        output_dir="data/output/lambda_${lambda}/seed_${seed}"
+        mkdir -p "$output_dir"
+
+        echo "[INFO] Running unit tests for lambda=${lambda}, seed=${seed}"
+        python3 -m unittest simulation_scripts/test_simulator.py
+
+        for mode in static hpa optimizer; do
+            echo "[INFO] Running simulation (${mode}) for lambda=${lambda}, seed=${seed}"
+            python3 <<EOF
 from simulation_scripts.simulator import PDUScheduler
-
-scheduler = PDUScheduler("data/input/pdus.csv", "data/input/upfs.csv", use_hpa=False)
+scheduler = PDUScheduler("data/input/pdus.csv", "data/input/upfs.csv", mode="${mode}")
 scheduler.run()
-scheduler.export_results("data/output/results_no_hpa.csv")
+scheduler.export_results("${output_dir}/results_${mode}.csv")
 EOF
+        done
 
-echo "[INFO] Running simulation WITH HPA"
-python3 <<EOF
-from simulation_scripts.simulator import PDUScheduler
+        for mode in static hpa optimizer; do
+            echo "[INFO] Generating summary for ${mode} (lambda=${lambda}, seed=${seed})"
+            python3 -c "
+from data_and_debug_scripts.generate_summary import generate_summary
+generate_summary('${output_dir}/results_${mode}.csv', '${output_dir}/summary_${mode}.csv')
+"
+        done
 
-scheduler = PDUScheduler("data/input/pdus.csv", "data/input/upfs.csv", use_hpa=True)
-scheduler.run()
-scheduler.export_results("data/output/results_hpa.csv")
-EOF
+        echo "[INFO] Checking PDU status for lambda=${lambda}, seed=${seed}"
+        python3 data_and_debug_scripts/check_pdu_status.py
 
-echo "[INFO] Generating summary reports"
-python3 -c "from data_and_debug_scripts.generate_summary import generate_summary; \
-    generate_summary('data/output/results_no_hpa.csv', 'data/output/summary_no_hpa.csv')"
-python3 -c "from data_and_debug_scripts.generate_summary import generate_summary; \
-    generate_summary('data/output/results_hpa.csv', 'data/output/summary_hpa.csv')"
+        echo "[SUCCESS] Simulation completed for lambda=${lambda}, seed=${seed}"
+    done
+done
 
-echo "[INFO] Checking PDU status"
-python3 data_and_debug_scripts/check_pdu_status.py
-
-echo "[SUCCESS] All simulations complete. Results and plots saved in /data/output and /results"
+echo "[SUCCESS] All simulations complete. Results and plots saved in /data/output"

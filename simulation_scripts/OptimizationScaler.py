@@ -8,7 +8,7 @@ class OptimizationScaler:
         self.pdus_df = pdus_df
         self.chunk_interval = chunk_interval
         self.last_check_time = -chunk_interval
-        self.solver = SolverFactory("scip", executable="/home/tmaiti/Downloads/SCIPOptSuite-9.1.1-Linux/bin/scip")
+        self.solver = SolverFactory('scip', executable='/home/tmaiti/ups_scaling/SCIPOptSuite-9.2.1-Linux/bin/scip')
         self.optimized_pdus = set()
         self.previous_assignments = {}
         self.active_upfs_df = upfs_df.copy()
@@ -18,7 +18,13 @@ class OptimizationScaler:
         return current_time - self.last_check_time >= self.chunk_interval
 
     def get_active_upfs(self, current_time):
-        return self.active_upfs_df.copy()
+        active_upfs_sorted = self.active_upfs_df.copy()
+        active_upfs_sorted["used_cpu"] = [
+            sum(self.upf_allocations.get(upf_id, {}).values())
+            for upf_id in active_upfs_sorted["upf_id"]
+        ]
+        active_upfs_sorted = active_upfs_sorted.sort_values(by="used_cpu", ascending=False)
+        return active_upfs_sorted
 
     def update(self, current_time, active_pdus_dict, pdu_to_upf):
         chunk_start = int(current_time)
@@ -49,7 +55,7 @@ class OptimizationScaler:
         total_pdus = len(model.A) if len(model.A) > 0 else 1
 
         model.obj = Objective(
-            expr=(sum(model.z[j] for j in model.A) / total_pdus) - 0.1 * (sum(model.x[i] for i in model.U)),
+            expr=(sum(model.z[j] for j in model.A) / total_pdus) - 1 * (sum(model.x[i] for i in model.U)),
             sense=maximize
         )
 
@@ -59,12 +65,6 @@ class OptimizationScaler:
             model.constraints.add(model.z[j] <= sum(model.y[j, i] for i in model.U))
             model.constraints.add(model.z[j] >= sum(model.y[j, i] for i in model.U))
             model.constraints.add(sum(model.y[j, i] for i in model.U) <= 1)
-
-            if j in self.previous_assignments:
-                assigned_i = self.previous_assignments[j]
-                for i in model.U:
-                    model.constraints.add(model.y[j, i] == (1 if i == assigned_i else 0))
-                model.constraints.add(model.z[j] == 1)
 
         for i in model.U:
             used_cpu = sum(

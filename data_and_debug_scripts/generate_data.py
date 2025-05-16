@@ -2,10 +2,10 @@ import pandas as pd
 import numpy as np
 
 def generate_pdu_data(
-    end_time_limit=100, lam=1.0, mu=0.02,
+    end_time_limit=3600, lam=0.1, mu=0.02,
     min_latency_range=(0.25, 0.5),
     max_latency_range=(0.1, 0.5),
-    rate_range=(100000, 200000),
+    rate_range=(100000,200000),
     seed=None
 ):
     if seed is not None:
@@ -14,7 +14,7 @@ def generate_pdu_data(
     inter_arrivals = []
     t = 0
     while t < end_time_limit:
-        iat = np.random.exponential(lam)
+        iat = np.random.exponential(1/lam)
         t += iat
         if t < end_time_limit:
             inter_arrivals.append(iat)
@@ -41,7 +41,7 @@ def generate_pdu_data(
 
 
 def generate_upf_data(
-    num_upfs=5,
+    num_upfs=100,
     workload=0.00025,
     capacity=200,
     seed=None
@@ -59,5 +59,5 @@ def generate_upf_data(
     print(f"[INFO] upfs.csv generated with {num_upfs} UPFs (workload={workload}, capacity={capacity})")
 
 if __name__ == "__main__":
-    generate_pdu_data(end_time_limit=100, lam=1, mu=0.02, seed=42)
-    generate_upf_data(num_upfs=5, seed=42)
+    generate_pdu_data(end_time_limit=3600, lam=5, mu=0.02, seed=42)
+    generate_upf_data(num_upfs=50, seed=42)

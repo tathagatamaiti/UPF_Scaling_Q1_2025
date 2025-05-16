@@ -52,13 +52,25 @@ class PDUScheduler:
 
     def _log_allocation(self, pdu_id, upf_id, cpu_allocated, status, event="START"):
         pdu_row = self.pdus_df[self.pdus_df["pdu_id"] == pdu_id].iloc[0]
-        upf = self.upfs_df[self.upfs_df["upf_id"] == upf_id].iloc[0]
-        observed_latency = self._calculate_observed_latency(upf["workload_factor"], pdu_row["rate"], cpu_allocated)
-        required_cpu = self._calculate_cpu_share(upf["workload_factor"], pdu_row["rate"], pdu_row["max_latency"])
+
+        if upf_id is None:
+            observed_latency = float('inf')
+            required_cpu = 0.0
+            upf_info = {"workload_factor": 0}
+        else:
+            upf = self.upfs_df[self.upfs_df["upf_id"] == upf_id].iloc[0]
+            observed_latency = self._calculate_observed_latency(
+                upf["workload_factor"], pdu_row["rate"], cpu_allocated
+            )
+            required_cpu = self._calculate_cpu_share(
+                upf["workload_factor"], pdu_row["rate"], pdu_row["max_latency"]
+            )
+            upf_info = upf
+
         self.result_log.append({
             "time": self.current_time,
             "pdu_id": pdu_id,
-            "upf_id": upf_id,
+            "upf_id": upf_id if upf_id is not None else "None",
             "cpu_allocated": cpu_allocated,
             "observed_latency": observed_latency,
             "required_cpu": required_cpu,
@@ -123,39 +135,67 @@ class PDUScheduler:
             self._rebalance_upf_full(upf_id)
 
     def _try_allocate_pdu(self, pdu_id, pdu_row):
-        print(f"[DEBUG] Attempting to allocate PDU {pdu_id} with rate={pdu_row['rate']}, max_latency={pdu_row['max_latency']}")
+        print(
+            f"[DEBUG] Attempting to allocate PDU {pdu_id} with rate={pdu_row['rate']}, max_latency={pdu_row['max_latency']}")
         self._rebalance_all_upfs_minimal()
 
         best_fit_upf = None
         max_remaining_cpu = float('-inf')
+
+        if pdu_id in self.pdu_to_upf:
+            assigned_upf = self.pdu_to_upf[pdu_id]
+            used_cpu = sum(self.upf_allocations[assigned_upf].values())
+            remaining_cpu = max(0.0, self.upfs_df.loc[self.upfs_df["upf_id"] == assigned_upf, "cpu_capacity"].iloc[
+                0] - used_cpu)
+
+            required_cpu = self._calculate_cpu_share(
+                self.upfs_df.loc[self.upfs_df["upf_id"] == assigned_upf, "workload_factor"].iloc[0], pdu_row["rate"],
+                pdu_row["max_latency"])
+            if remaining_cpu >= required_cpu:
+                best_fit_upf = assigned_upf
 
         for _, upf in self.active_upfs.iterrows():
             upf_id = upf["upf_id"]
             used_cpu = sum(self.upf_allocations[upf_id].values())
             remaining_cpu = max(0.0, upf["cpu_capacity"] - used_cpu)
 
-            if remaining_cpu > max_remaining_cpu:
-                best_fit_upf = upf_id
-                max_remaining_cpu = remaining_cpu
-
-        if best_fit_upf is not None:
-            upf = self.upfs_df[self.upfs_df["upf_id"] == best_fit_upf].iloc[0]
             required_cpu = self._calculate_cpu_share(upf["workload_factor"], pdu_row["rate"], pdu_row["max_latency"])
-            if max_remaining_cpu < required_cpu:
-                self.pdu_status[pdu_id] = "REJECTED"
-                self.rejected_pdus.add(pdu_id)
-                self._log_allocation(pdu_id, best_fit_upf, 0.0, "REJECTED")
-                return False
+            if remaining_cpu >= required_cpu:
+                best_fit_upf = upf_id
+                break
 
-            self.upf_allocations[best_fit_upf][pdu_id] = required_cpu
-            self.pdu_to_upf[pdu_id] = best_fit_upf
-            self.pdu_status[pdu_id] = "SATISFIED"
-            self._log_allocation(pdu_id, best_fit_upf, required_cpu, "SATISFIED")
+        if best_fit_upf is None:
+            inactive_upfs = self.upfs_df[~self.upfs_df["upf_id"].isin(self.active_upfs["upf_id"])]
+            for _, upf in inactive_upfs.iterrows():
+                upf_id = upf["upf_id"]
+                remaining_cpu = upf["cpu_capacity"]
+                required_cpu = self._calculate_cpu_share(upf["workload_factor"], pdu_row["rate"],
+                                                         pdu_row["max_latency"])
+                if remaining_cpu >= required_cpu:
+                    best_fit_upf = upf_id
+                    break
 
-            self._rebalance_all_upfs_full()
-            return True
+        if best_fit_upf is None:
+            self.pdu_status[pdu_id] = "REJECTED"
+            self.rejected_pdus.add(pdu_id)
+            self._log_allocation(pdu_id, None, 0.0, "REJECTED")
+            return False
 
-        return False
+        required_cpu = self._calculate_cpu_share(
+            self.upfs_df.loc[self.upfs_df["upf_id"] == best_fit_upf, "workload_factor"].iloc[0], pdu_row["rate"],
+            pdu_row["max_latency"])
+        self.upf_allocations[best_fit_upf][pdu_id] = required_cpu
+        self.pdu_to_upf[pdu_id] = best_fit_upf
+        self.pdu_status[pdu_id] = "SATISFIED"
+        self._log_allocation(pdu_id, best_fit_upf, required_cpu, "SATISFIED")
+
+        if best_fit_upf not in self.active_upfs["upf_id"].values:
+            new_active_upf = self.upfs_df[self.upfs_df["upf_id"] == best_fit_upf]
+            self.active_upfs = pd.concat([self.active_upfs, new_active_upf], ignore_index=True)
+            print(f"[OPTIMIZER] Activated new UPF {best_fit_upf}")
+
+        self._rebalance_all_upfs_full()
+        return True
 
     def _handle_start(self, pdu_id):
         print(f"[DEBUG] Starting PDU {pdu_id}")
@@ -212,6 +252,8 @@ class PDUScheduler:
                 self.optimizer.update(self.current_time, self.active_pdus, self.pdu_to_upf)
                 self.active_upfs = self.optimizer.get_active_upfs(self.current_time)
                 self.optimizer.last_run_time = self.current_time
+
+                self._rebalance_all_upfs_minimal()
 
             if event_type == "start":
                 self._handle_start(pdu_id)

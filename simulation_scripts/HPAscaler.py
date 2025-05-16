@@ -3,7 +3,7 @@ import heapq
 from typing import Dict, List
 
 class HPAScaler:
-    def __init__(self, upfs_df: pd.DataFrame, scale_out_threshold=80, scale_in_threshold=20, interval=15):
+    def __init__(self, upfs_df: pd.DataFrame, scale_out_threshold=70, scale_in_threshold=30, interval=5):
         self.full_upf_pool = upfs_df.copy()
         self.scale_out_threshold = scale_out_threshold
         self.scale_in_threshold = scale_in_threshold
