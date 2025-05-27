@@ -192,7 +192,7 @@ class PDUScheduler:
         if best_fit_upf not in self.active_upfs["upf_id"].values:
             new_active_upf = self.upfs_df[self.upfs_df["upf_id"] == best_fit_upf]
             self.active_upfs = pd.concat([self.active_upfs, new_active_upf], ignore_index=True)
-            print(f"[OPTIMIZER] Activated new UPF {best_fit_upf}")
+            print(f"[OPTIMIZER] Allocated to UPF {best_fit_upf}")
 
         self._rebalance_all_upfs_full()
         return True
