@@ -261,6 +261,77 @@ class PDUScheduler:
                 if pdu_id not in self.rejected_pdus:
                     self._handle_end(pdu_id)
 
-    def export_results(self, file_path="allocation_results.csv"):
-        pd.DataFrame(self.result_log).to_csv(file_path, index=False)
-        print(f"[INFO] Results saved to {file_path}")
+    def get_results_df(self) -> pd.DataFrame:
+        return pd.DataFrame(self.result_log)
+
+def compute_active_upf_utilization(results_df: pd.DataFrame, upfs_df: pd.DataFrame) -> float:
+    upf_capacities = dict(zip(upfs_df["upf_id"], upfs_df["cpu_capacity"]))
+
+    start_events = results_df[results_df["event"] == "START"]
+    end_events = results_df[results_df["event"] == "TERMINATE"]
+
+    session_df = pd.merge(
+        start_events[["pdu_id", "time", "upf_id", "cpu_allocated"]],
+        end_events[["pdu_id", "time"]],
+        on="pdu_id",
+        suffixes=("_start", "_end")
+    )
+
+    time_points = sorted(results_df["time"].unique())
+    utilization_over_time = []
+
+    for t in time_points:
+        snapshot = session_df[
+            (session_df["time_start"] <= t) &
+            (session_df["time_end"] > t)
+            ]
+
+        active_upfs = snapshot["upf_id"].unique()
+        if len(active_upfs) == 0:
+            utilization_over_time.append(0)
+            continue
+
+        total_allocated = snapshot["cpu_allocated"].sum()
+        total_active_capacity = sum(upf_capacities.get(int(upf), 1e-9) for upf in active_upfs)
+
+        utilization_percent = (total_allocated / total_active_capacity) * 100
+        utilization_percent = min(utilization_percent, 100)
+        utilization_over_time.append(utilization_percent)
+
+    return sum(utilization_over_time) / len(utilization_over_time) if utilization_over_time else 0.0
+
+def generate_summary_from_results(results_df: pd.DataFrame) -> pd.DataFrame:
+    df_start = results_df[results_df["event"] == "START"]
+    total_pdus = len(df_start)
+    satisfied = (df_start["status"] == "SATISFIED").sum()
+    unsatisfied = (df_start["status"] == "UNSATISFIED").sum()
+    rejected = (df_start["status"] == "REJECTED").sum()
+    used_upfs = df_start[df_start["status"] != "REJECTED"]["upf_id"].nunique()
+
+    return pd.DataFrame([{
+        "total_pdus": total_pdus,
+        "satisfied_pdus": satisfied,
+        "unsatisfied_pdus": unsatisfied,
+        "rejected_pdus": rejected,
+        "used_upfs": used_upfs,
+        "satisfaction_ratio (%)": round((satisfied / total_pdus) * 100, 2) if total_pdus > 0 else 0
+    }])
+
+def main():
+    pdus_df = pd.read_csv("data/input/pdus.csv")
+    upfs_df = pd.read_csv("data/input/upfs.csv")
+
+    modes = ["static", "hpa", "optimizer"]
+    for mode in modes:
+        scheduler = PDUScheduler(pdus_df, upfs_df, mode=mode)
+        scheduler.run()
+        results_df = scheduler.get_results_df()
+
+        utilization = compute_active_upf_utilization(results_df, upfs_df)
+        summary_df = generate_summary_from_results(results_df)
+
+        print(f"\n[{mode.upper()}] Avg Active UPF Utilization: {utilization:.2f}%")
+        print(summary_df)
+
+if __name__ == "__main__":
+    main()

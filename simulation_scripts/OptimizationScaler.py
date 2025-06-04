@@ -1,9 +1,9 @@
 from pyomo.environ import (
-    ConcreteModel, Set, Var, Binary, Objective, ConstraintList, SolverFactory, maximize
+    ConcreteModel, Set, Var, Binary, Objective, ConstraintList, SolverFactory, maximize, NonNegativeReals
 )
 
 class OptimizationScaler:
-    def __init__(self, upfs_df, pdus_df, chunk_interval=5):
+    def __init__(self, upfs_df, pdus_df, chunk_interval=15):
         self.upfs_df = upfs_df
         self.pdus_df = pdus_df
         self.chunk_interval = chunk_interval
@@ -48,6 +48,8 @@ class OptimizationScaler:
         model.x = Var(model.U, within=Binary)
         model.y = Var(model.A, model.U, within=Binary)
         model.z = Var(model.A, within=Binary)
+        model.cpu_alloc = Var(model.A, model.U, within=NonNegativeReals)
+        model.v = Var(model.A, within=Binary)
 
         upf_dict = self.upfs_df.set_index("upf_id").to_dict("index")
         pdu_dict = pdu_chunk_df.set_index("pdu_id").to_dict("index")
@@ -55,24 +57,30 @@ class OptimizationScaler:
         total_pdus = len(model.A) if len(model.A) > 0 else 1
 
         model.obj = Objective(
-            expr=(sum(model.z[j] for j in model.A) / total_pdus) - 1 * (sum(model.x[i] for i in model.U)),
+            expr=(sum(model.z[j] for j in model.A) / total_pdus)
+                 - 1 * (sum(model.x[i] for i in model.U))
+                 - 1 * (sum(model.v[j] for j in model.A)),
             sense=maximize
         )
 
         model.constraints = ConstraintList()
 
         for j in model.A:
-            model.constraints.add(model.z[j] <= sum(model.y[j, i] for i in model.U))
-            model.constraints.add(model.z[j] >= sum(model.y[j, i] for i in model.U))
+            model.constraints.add(model.z[j] == sum(model.y[j, i] for i in model.U))
             model.constraints.add(sum(model.y[j, i] for i in model.U) <= 1)
 
         for i in model.U:
-            used_cpu = sum(
-                (upf_dict[i]["workload_factor"] * pdu_dict[j]["rate"]) / pdu_dict[j]["max_latency"]
-                * model.y[j, i]
-                for j in model.A
+            model.constraints.add(
+                sum(model.cpu_alloc[j, i] for j in model.A) <= upf_dict[i]["cpu_capacity"] * model.x[i]
             )
-            model.constraints.add(used_cpu <= upf_dict[i]["cpu_capacity"] * model.x[i])
+
+        for j in model.A:
+            for i in model.U:
+                cpu_req = (upf_dict[i]["workload_factor"] * pdu_dict[j]["rate"]) / pdu_dict[j]["max_latency"]
+                model.constraints.add(model.cpu_alloc[j, i] <= cpu_req * model.y[j, i])
+                model.constraints.add(
+                    sum(model.cpu_alloc[j, i] for i in model.U) >= cpu_req * (1 - model.v[j])
+                )
 
         self.solver.solve(model, tee=False)
 

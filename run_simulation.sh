@@ -3,7 +3,7 @@ set -e
 pip install --upgrade pip
 pip install pandas matplotlib typing numpy pyomo
 
-lambdas=(15)
+lambdas=(0.5)
 seeds=(1000000007 1000000009 1000000021 1000000033 1000000087 1000000093 1000000103 1000000123 1000000181 1000000207)
 
 for lambda in "${lambdas[@]}"; do
