@@ -101,8 +101,14 @@ class PDUScheduler:
         for pid in new_allocations:
             new_allocations[pid] *= scale
             allocations[pid] = new_allocations[pid]
-            self.pdu_status[pid] = "SATISFIED"
-            self._log_allocation(pid, upf_id, allocations[pid], "SATISFIED", event="REBALANCE")
+            status = "SATISFIED" if new_allocations[pid] >= self._calculate_cpu_share(
+                upf["workload_factor"],
+                self.pdus_df[self.pdus_df["pdu_id"] == pid]["rate"].values[0],
+                self.pdus_df[self.pdus_df["pdu_id"] == pid]["max_latency"].values[0]
+            ) else "UNSATISFIED"
+
+            self.pdu_status[pid] = status
+            self._log_allocation(pid, upf_id, new_allocations[pid], status, event="REBALANCE")
 
     def _rebalance_all_upfs_minimal(self):
         for upf_id in self.active_upfs["upf_id"]:
@@ -249,8 +255,9 @@ class PDUScheduler:
             elif self.mode == "optimizer" and (
                     self.current_time - self.optimizer.last_run_time) >= self.optimizer.chunk_interval:
                 print(f"[OPTIMIZER] Running optimizer at time {self.current_time}")
+                self.optimizer.scheduler = self
                 self.optimizer.update(self.current_time, self.active_pdus, self.pdu_to_upf)
-                self.active_upfs = self.optimizer.get_active_upfs(self.current_time)
+                self.active_upfs = self.optimizer.get_active_upfs(self.current_time, self.upf_allocations)
                 self.optimizer.last_run_time = self.current_time
 
                 self._rebalance_all_upfs_minimal()
@@ -263,6 +270,7 @@ class PDUScheduler:
 
     def get_results_df(self) -> pd.DataFrame:
         return pd.DataFrame(self.result_log)
+
 
 def compute_active_upf_utilization(results_df: pd.DataFrame, upfs_df: pd.DataFrame) -> float:
     upf_capacities = dict(zip(upfs_df["upf_id"], upfs_df["cpu_capacity"]))
@@ -300,7 +308,8 @@ def compute_active_upf_utilization(results_df: pd.DataFrame, upfs_df: pd.DataFra
 
     return sum(utilization_over_time) / len(utilization_over_time) if utilization_over_time else 0.0
 
-def generate_summary_from_results(results_df: pd.DataFrame) -> pd.DataFrame:
+
+def generate_summary_from_results(results_df: pd.DataFrame, normalized_latency: float) -> pd.DataFrame:
     df_start = results_df[results_df["event"] == "START"]
     total_pdus = len(df_start)
     satisfied = (df_start["status"] == "SATISFIED").sum()
@@ -314,8 +323,22 @@ def generate_summary_from_results(results_df: pd.DataFrame) -> pd.DataFrame:
         "unsatisfied_pdus": unsatisfied,
         "rejected_pdus": rejected,
         "used_upfs": used_upfs,
-        "satisfaction_ratio (%)": round((satisfied / total_pdus) * 100, 2) if total_pdus > 0 else 0
+        "satisfaction_ratio (%)": round((satisfied / total_pdus) * 100, 2) if total_pdus > 0 else 0,
+        "avg_normalized_latency": round(normalized_latency, 4)
     }])
+
+
+
+def compute_average_normalized_latency(results_df: pd.DataFrame) -> float:
+    df_start = results_df[results_df["event"] == "START"].copy()
+    df_start = df_start[df_start["status"].isin(["SATISFIED", "UNSATISFIED"])]
+    df_start = df_start[df_start["required_max_latency"] > 0]
+
+    if df_start.empty:
+        return 0.0
+
+    df_start["normalized_latency"] = df_start["observed_latency"] / df_start["required_max_latency"]
+    return df_start["normalized_latency"].mean()
 
 def main():
     pdus_df = pd.read_csv("data/input/pdus.csv")
@@ -328,10 +351,13 @@ def main():
         results_df = scheduler.get_results_df()
 
         utilization = compute_active_upf_utilization(results_df, upfs_df)
-        summary_df = generate_summary_from_results(results_df)
+        normalized_latency = compute_average_normalized_latency(results_df)
+        summary_df = generate_summary_from_results(results_df, normalized_latency)
 
         print(f"\n[{mode.upper()}] Avg Active UPF Utilization: {utilization:.2f}%")
         print(summary_df)
+
+
 
 if __name__ == "__main__":
     main()

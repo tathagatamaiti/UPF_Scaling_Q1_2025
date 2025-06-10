@@ -17,16 +17,17 @@ class OptimizationScaler:
     def should_check(self, current_time):
         return current_time - self.last_check_time >= self.chunk_interval
 
-    def get_active_upfs(self, current_time):
+    def get_active_upfs(self, current_time, upf_allocations):
         active_upfs_sorted = self.active_upfs_df.copy()
         active_upfs_sorted["used_cpu"] = [
-            sum(self.upf_allocations.get(upf_id, {}).values())
+            sum(upf_allocations.get(upf_id, {}).values())
             for upf_id in active_upfs_sorted["upf_id"]
         ]
         active_upfs_sorted = active_upfs_sorted.sort_values(by="used_cpu", ascending=False)
         return active_upfs_sorted
 
     def update(self, current_time, active_pdus_dict, pdu_to_upf):
+        self.scheduler = None
         chunk_start = int(current_time)
         chunk_end = chunk_start + self.chunk_interval - 1
         self.last_check_time = current_time
@@ -58,8 +59,7 @@ class OptimizationScaler:
 
         model.obj = Objective(
             expr=(sum(model.z[j] for j in model.A) / total_pdus)
-                 - 1 * (sum(model.x[i] for i in model.U))
-                 - 1 * (sum(model.v[j] for j in model.A)),
+                 - 1 * (sum(model.x[i] for i in model.U)),
             sense=maximize
         )
 
@@ -98,6 +98,10 @@ class OptimizationScaler:
                     if model.y[j, i].value and model.y[j, i].value > 0.5:
                         self.previous_assignments[j] = i
                         break
+                if model.v[j].value and model.v[j].value > 0.5:
+                    self.scheduler.pdu_status[j] = "UNSATISFIED"
+                else:
+                    self.scheduler.pdu_status[j] = "SATISFIED"
 
         self.active_upfs_df = self.upfs_df[self.upfs_df["upf_id"].isin(activated_upfs)].copy()
         print(f"[OPTIMIZER] Chunk {chunk_start}-{chunk_end}: considered {len(pdu_chunk_df)}, "

@@ -4,13 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="c53c7888-2400-45c2-8fdf-81d8fd594c9d" name="Changes" comment="initial code commit">
-      <change beforePath="$PROJECT_DIR$/.idea/UPF_Scaling_Q1_2025.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/UPF_Scaling_Q1_2025.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+    <list default="true" id="c53c7888-2400-45c2-8fdf-81d8fd594c9d" name="Changes" comment="test commit">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/input/pdus.csv" beforeDir="false" afterPath="$PROJECT_DIR$/data/input/pdus.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/input/upfs.csv" beforeDir="false" afterPath="$PROJECT_DIR$/data/input/upfs.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_simulation.sh" beforeDir="false" afterPath="$PROJECT_DIR$/run_simulation.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/result_scripts/plot_summary.py" beforeDir="false" afterPath="$PROJECT_DIR$/result_scripts/plot_summary.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_upf_summary.sh" beforeDir="false" afterPath="$PROJECT_DIR$/run_upf_summary.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/simulation_scripts/OptimizationScaler.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation_scripts/OptimizationScaler.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/simulation_scripts/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation_scripts/simulator.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -121,7 +120,31 @@
       <option name="project" value="LOCAL" />
       <updated>1741875161503</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="final commit">
+      <option name="closed" value="true" />
+      <created>1748335915177</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1748335915177</updated>
+    </task>
+    <task id="LOCAL-00003" summary="final commit">
+      <option name="closed" value="true" />
+      <created>1748335952248</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1748335952248</updated>
+    </task>
+    <task id="LOCAL-00004" summary="test commit">
+      <option name="closed" value="true" />
+      <created>1749050520993</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1749050520993</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -137,6 +160,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="initial code commit" />
-    <option name="LAST_COMMIT_MESSAGE" value="initial code commit" />
+    <MESSAGE value="final commit" />
+    <MESSAGE value="test commit" />
+    <option name="LAST_COMMIT_MESSAGE" value="test commit" />
   </component>
 </project>

@@ -66,8 +66,8 @@ fancy_plot(
     yerrs=["std_static_upfs", "std_hpa_upfs", "std_optimizer_upfs"],
     labels=["Static", "HPA", "Optimizer"],
     ylabel="Average UPFs Used",
-    title="Average Number of UPFs vs λ / μ",
-    filename="plot_upfs_vs_lambda_mu.png"
+    title="",
+    filename="plot_upfs_vs_lambda_mu.eps"
 )
 
 fancy_plot(
@@ -75,9 +75,9 @@ fancy_plot(
     ys=["avg_static_rejection (%)", "avg_hpa_rejection (%)", "avg_optimizer_rejection (%)"],
     yerrs=["std_static_rejection (%)", "std_hpa_rejection (%)", "std_optimizer_rejection (%)"],
     labels=["Static", "HPA", "Optimizer"],
-    ylabel="Rejection Rate (%)",
-    title="Rejection Rate vs λ / μ",
-    filename="plot_rejection_vs_lambda_mu.png"
+    ylabel="Dissatisfaction Rate (%)",
+    title="",
+    filename="plot_dissatisfaction_vs_lambda_mu.eps"
 )
 
 fancy_plot(
@@ -86,8 +86,8 @@ fancy_plot(
     yerrs=["std_static_satisfaction (%)", "std_hpa_satisfaction (%)", "std_optimizer_satisfaction (%)"],
     labels=["Static", "HPA", "Optimizer"],
     ylabel="Satisfaction Rate (%)",
-    title="Satisfaction Rate vs λ / μ",
-    filename="plot_satisfaction_vs_lambda_mu.png"
+    title="",
+    filename="plot_satisfaction_vs_lambda_mu.eps"
 )
 
 if "avg_static_utilization_active_upfs (%)" in summary_df.columns:
@@ -100,11 +100,11 @@ if "avg_static_utilization_active_upfs (%)" in summary_df.columns:
              label="Optimizer", marker="D", linewidth=2, markersize=5)
     plt.xlabel(r"$\lambda / \mu$", fontsize=18)
     plt.ylabel("Avg. Cluster Utilization (%)", fontsize=18)
-    plt.title("Average Cluster Utilization vs λ / μ", fontsize=20, fontweight="bold")
+    plt.title("")
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     plt.legend(fontsize=13, frameon=True, fancybox=True, shadow=True)
     sns.despine()
     plt.tight_layout()
-    plt.savefig(os.path.join(root_dir, "plot_utilization_vs_lambda_mu.png"), dpi=300)
+    plt.savefig(os.path.join(root_dir, "plot_utilization_vs_lambda_mu.eps"), dpi=300)
     plt.show()
