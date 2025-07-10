@@ -1,9 +1,10 @@
+#!/bin/bash
 set -e
 
 pip install --upgrade pip
 pip install pandas matplotlib typing numpy pyomo
 
-lambdas=(0.5)
+lambdas=(0.1 0.3 0.5 0.7 1 3 5 7 10 15 20)
 seeds=(1000000007 1000000009 1000000021 1000000033 1000000087 1000000093 1000000103 1000000123 1000000181 1000000207)
 
 for lambda in "${lambdas[@]}"; do
@@ -22,32 +23,16 @@ print('[INFO] Data generated for lambda=${lambda}, seed=${seed}')
         output_dir="data/output/lambda_${lambda}/seed_${seed}"
         mkdir -p "$output_dir"
 
-        echo "[INFO] Running unit tests for lambda=${lambda}, seed=${seed}"
-        python3 -m unittest simulation_scripts/test_simulator.py
+        echo "[INFO] Running simulation and summarization for lambda=${lambda}, seed=${seed}"
+        python3 simulation_scripts/run_simulation_and_summarize.py \
+            data/input/pdus.csv \
+            data/input/upfs.csv \
+            "$output_dir"
 
-        for mode in static hpa optimizer; do
-            echo "[INFO] Running simulation (${mode}) for lambda=${lambda}, seed=${seed}"
-            python3 <<EOF
-from simulation_scripts.simulator import PDUScheduler
-scheduler = PDUScheduler("data/input/pdus.csv", "data/input/upfs.csv", mode="${mode}")
-scheduler.run()
-scheduler.export_results("${output_dir}/results_${mode}.csv")
-EOF
-        done
-
-        for mode in static hpa optimizer; do
-            echo "[INFO] Generating summary for ${mode} (lambda=${lambda}, seed=${seed})"
-            python3 -c "
-from data_and_debug_scripts.generate_summary import generate_summary
-generate_summary('${output_dir}/results_${mode}.csv', '${output_dir}/summary_${mode}.csv')
-"
-        done
-
-        echo "[INFO] Checking PDU status for lambda=${lambda}, seed=${seed}"
-        python3 data_and_debug_scripts/check_pdu_status.py
-
-        echo "[SUCCESS] Simulation completed for lambda=${lambda}, seed=${seed}"
+        echo "[SUCCESS] Completed lambda=${lambda}, seed=${seed}"
     done
 done
 
-echo "[SUCCESS] All simulations complete. Results and plots saved in /data/output"
+echo "[SUCCESS] All simulations complete. Results saved in data/output/"
+
+

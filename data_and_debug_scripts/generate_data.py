@@ -39,7 +39,6 @@ def generate_pdu_data(
     pdus_df.to_csv("data/input/pdus.csv", index=False)
     print(f"[INFO] pdus.csv generated with {num_pdus} PDUs (up to time {end_time_limit})")
 
-
 def generate_upf_data(
     num_upfs=100,
     workload=0.00025,
@@ -61,3 +60,4 @@ def generate_upf_data(
 if __name__ == "__main__":
     generate_pdu_data(end_time_limit=3600, lam=5, mu=0.02, seed=42)
     generate_upf_data(num_upfs=50, seed=42)
+
